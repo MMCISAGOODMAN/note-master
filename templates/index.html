@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ops Notepad · 运维记事本</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230d9488'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-size='16' font-family='monospace' font-weight='700' fill='white'%3EN%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+  <div class="app" id="app">
+    <!-- Toolbar -->
+    <header class="toolbar">
+      <div class="brand">
+        <div class="brand-mark">N</div>
+        <div>
+          <div class="brand-name">Ops Notepad</div>
+          <div class="brand-sub">运维第二大脑</div>
+        </div>
+      </div>
+
+      <div class="search-wrap" id="searchWrap">
+        <span class="search-icon">⌕</span>
+        <input type="search" id="searchInput" placeholder="搜索笔记、标签、服务器… (Ctrl+F)" autocomplete="off" />
+        <button class="search-clear" id="searchClear" title="清除 (Esc)">✕</button>
+        <div class="search-dropdown" id="searchHistory"></div>
+      </div>
+
+      <div class="toolbar-actions">
+        <button class="btn btn-primary" id="btnNew" title="Ctrl+N">＋ 新建笔记</button>
+        <button class="btn btn-ghost" id="btnIncident" title="故障模板">故障模板</button>
+        <button class="btn btn-ghost" id="btnDaily" title="生成日报">日报</button>
+        <button class="btn-icon" id="btnExport" title="导出备份">⬇</button>
+        <button class="btn-icon" id="btnImport" title="导入恢复">⬆</button>
+        <input type="file" id="importFile" accept=".json,application/json" hidden />
+      </div>
+    </header>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <nav class="sidebar-nav">
+        <button class="nav-tab active" data-view="notes">笔记</button>
+        <button class="nav-tab" data-view="commands">命令</button>
+        <button class="nav-tab" data-view="knowledge">知识库</button>
+        <button class="nav-tab" data-view="calendar">日历</button>
+        <button class="nav-tab" data-view="stats">统计</button>
+        <button class="nav-tab" data-view="servers">服务器</button>
+      </nav>
+
+      <div class="filters" id="categoryFilters"></div>
+      <div class="filters" id="extraFilters" style="padding-top:0">
+        <button class="chip" data-filter="archived">归档</button>
+        <button class="chip" data-filter="deleted">回收站</button>
+        <button class="chip" data-filter="pinned">置顶</button>
+      </div>
+
+      <div class="note-list" id="noteList">
+        <div class="empty-list">加载中…</div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main" id="main">
+      <!-- Empty state -->
+      <div class="editor-empty" id="emptyState">
+        <div class="brand-mark" style="width:48px;height:48px;font-size:22px">N</div>
+        <h2>运维专属记事本</h2>
+        <p>记录故障、收藏命令、沉淀知识</p>
+        <p><kbd>Ctrl</kbd>+<kbd>N</kbd> 新建 · <kbd>Ctrl</kbd>+<kbd>F</kbd> 搜索</p>
+        <button class="btn btn-primary" style="margin-top:8px" id="btnNewEmpty">新建笔记</button>
+      </div>
+
+      <!-- Editor -->
+      <div class="editor-pane" id="editorPane">
+        <div class="editor-meta">
+          <select id="noteCategory" title="分类"></select>
+          <select id="noteServer" title="关联服务器">
+            <option value="">未关联服务器</option>
+          </select>
+          <select id="noteEnv" title="环境">
+            <option value="">环境</option>
+            <option value="生产">生产</option>
+            <option value="测试">测试</option>
+            <option value="开发">开发</option>
+          </select>
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-muted)">
+            <input type="checkbox" id="noteKnowledge" /> 知识库
+          </label>
+          <div style="margin-left:auto;display:flex;gap:4px">
+            <button class="btn btn-ghost btn-sm" id="btnPin" title="置顶">📌 置顶</button>
+            <button class="btn btn-ghost btn-sm" id="btnArchive" title="归档">归档</button>
+            <button class="btn btn-ghost btn-sm" id="btnVersions" title="版本历史">历史</button>
+            <button class="btn btn-danger btn-sm" id="btnDelete" title="Ctrl+Delete">删除</button>
+          </div>
+        </div>
+
+        <input class="editor-title" id="noteTitle" placeholder="笔记标题" />
+
+        <div class="similar-box" id="similarBox">
+          <h4>相似问题推荐</h4>
+          <div id="similarList"></div>
+        </div>
+
+        <div class="tags-input-wrap" id="tagsWrap">
+          <div id="tagsDisplay"></div>
+          <input id="tagInput" placeholder="#添加标签，回车确认" autocomplete="off" />
+          <div class="ac-dropdown" id="tagAc"></div>
+        </div>
+
+        <div class="editor-toolbar">
+          <button class="tb-btn" data-insert="code-bash" title="Ctrl+Shift+C">```bash</button>
+          <button class="tb-btn" data-insert="code-python">```python</button>
+          <button class="tb-btn" data-insert="code-sql">```sql</button>
+          <span class="tb-sep"></span>
+          <button class="tb-btn" data-insert="timestamp" title="Ctrl+D">时间戳</button>
+          <button class="tb-btn" data-insert="server">服务器信息</button>
+          <button class="tb-btn" id="btnPhrases">常用短语 ▾</button>
+          <span class="tb-sep"></span>
+          <button class="tb-btn" id="btnPreview" title="Ctrl+Shift+P">预览</button>
+          <button class="tb-btn" id="btnSave" title="Ctrl+S">保存</button>
+          <button class="tb-btn" id="btnLike" style="display:none">👍 点赞</button>
+          <button class="tb-btn" id="btnCopySolution" style="display:none">复制方案</button>
+        </div>
+
+        <div class="editor-body" id="editorBody">
+          <div class="editor-area">
+            <textarea id="noteContent" placeholder="开始记录… 支持 Markdown" spellcheck="false"></textarea>
+          </div>
+          <div class="preview-area" id="previewArea"></div>
+        </div>
+
+        <div class="editor-status">
+          <span class="save-state" id="saveState">已保存</span>
+          <span id="noteUpdated"></span>
+          <span id="wordCount"></span>
+          <span style="margin-left:auto" id="shortcutHint">Ctrl+S 保存 · Ctrl+D 时间戳 · Ctrl+Shift+C 代码块</span>
+        </div>
+      </div>
+
+      <!-- Commands panel -->
+      <div class="panel-view" id="panel-commands">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
+          <h2 style="margin:0">命令收藏夹</h2>
+          <button class="btn btn-primary btn-sm" id="btnAddCmd">＋ 添加命令</button>
+        </div>
+        <p class="panel-desc">收藏常用 Shell / SQL / 运维命令，一键复制</p>
+        <div class="cmd-filters" id="cmdFilters"></div>
+        <div class="cmd-grid" id="cmdGrid"></div>
+      </div>
+
+      <!-- Knowledge panel -->
+      <div class="panel-view" id="panel-knowledge">
+        <h2>知识库 · 问题与方案</h2>
+        <p class="panel-desc">故障记录沉淀，按点赞排序，快速复用解决方案</p>
+        <div class="cmd-grid" id="knowledgeGrid"></div>
+      </div>
+
+      <!-- Calendar panel -->
+      <div class="panel-view" id="panel-calendar">
+        <h2>运维日历</h2>
+        <p class="panel-desc">有笔记的日期会标记圆点，点击查看当天记录</p>
+        <div class="calendar-wrap">
+          <div class="cal-header">
+            <button class="btn-icon" id="calPrev">‹</button>
+            <h3 id="calTitle"></h3>
+            <button class="btn-icon" id="calNext">›</button>
+          </div>
+          <div class="cal-grid" id="calGrid"></div>
+          <div class="cal-day-list" id="calDayList"></div>
+        </div>
+      </div>
+
+      <!-- Stats panel -->
+      <div class="panel-view" id="panel-stats">
+        <h2>统计看板</h2>
+        <p class="panel-desc">记录习惯与知识沉淀一览</p>
+        <div class="stats-grid" id="statsGrid"></div>
+        <h3 style="font-size:14px;margin:0 0 12px;color:var(--text-muted)">标签 TOP10</h3>
+        <div class="bar-list" id="tagBars"></div>
+        <h3 style="font-size:14px;margin:24px 0 12px;color:var(--text-muted)">分类分布</h3>
+        <div class="bar-list" id="catBars"></div>
+      </div>
+
+      <!-- Servers panel -->
+      <div class="panel-view" id="panel-servers">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
+          <h2 style="margin:0">服务器</h2>
+          <button class="btn btn-primary btn-sm" id="btnAddServer">＋ 添加</button>
+        </div>
+        <p class="panel-desc">关联笔记与服务器，按 IP / 环境筛选</p>
+        <div class="server-list" id="serverList"></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Context menu -->
+  <div class="ctx-menu" id="ctxMenu">
+    <button data-action="open">打开</button>
+    <button data-action="pin">置顶 / 取消置顶</button>
+    <button data-action="archive">归档 / 取消归档</button>
+    <button data-action="copy">复制标题</button>
+    <hr />
+    <button data-action="delete" class="danger">删除</button>
+    <button data-action="restore">恢复</button>
+  </div>
+
+  <!-- Phrases dropdown (positioned dynamically) -->
+  <div class="ctx-menu" id="phrasesMenu" style="min-width:240px"></div>
+
+  <!-- Modal -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal" id="modal"></div>
+  </div>
+
+  <!-- Export modal content is injected -->
+  <div class="toast-wrap" id="toasts"></div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
